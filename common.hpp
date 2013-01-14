@@ -23,6 +23,6 @@ enum{
   ERR_ID_CONFLICT  = 0xf1,
   ERR_ID_NOT_FOUND = 0xf2,
   ERR_PROTOCOL     = 0xf3
-};
+}opcode_t;
 
 #endif

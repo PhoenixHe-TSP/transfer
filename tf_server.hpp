@@ -54,6 +54,8 @@ public:
 
           std::cerr<< "passed one package."<< std::endl;
           return;
+        case ERR_PROTOCOL:
+          return;
       }
     }
     else
@@ -71,6 +73,8 @@ public:
           return;
         case REQ_PING:
           RET(REQ_PONG);
+        case ERR_PROTOCOL:
+          return;
       }
     }
     RET(ERR_PROTOCOL);
