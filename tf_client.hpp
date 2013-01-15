@@ -1,68 +1,86 @@
-#ifndef _H_TF_CLIENT_
-#define _H_TF_CLIENT_
+#ifndef _TF_CLIENT_HPP_
+#define _TF_CLIENT_HPP_
 
-#include <iostream>
-#include <string>
-#include <websocketpp/roles/client.hpp>
-#include <websocketpp/websocketpp.hpp>
-#include "id.hpp"
+#include <cstring>
+#include <vector>
 #include "common.hpp"
 
-using websocketpp::client;
+namespace transfer{
 
-class tf_client_handler : public client::handler
+template<typename Tcon_ptr, size_t PRE_BYTES=0, size_t POST_BYTES=0>
+class client
 {
 public:
-  enum{ HEAD_LEN= 1+id::LEN };
-  void set_id(const id d);
-  void ping(const id to);
-  void send(const id to, const char* in, size_t cnt);
-  void send(const id to, const std::string& msg);
-  void close()
-  {
-    con_.
-  }
-
+  virtual void raw_send(Tcon_ptr con, unsigned char *msg, size_t cnt)=0;
   virtual void on_setting_succ(const id){}
-  virtual void on_data(const id, const std::string& msg){}
+  virtual void on_data(const id, unsigned char *msg, size_t cnt){}
   virtual void on_pong(const id){}
-  virtual void on_error(const id, const std::string& msg){}
+  virtual void on_error(const id, unsigned char *msg, size_t cnt){}
 
-private:
+  enum{ HEAD_LEN= 1+id::LEN };
 
-  void on_open
+  inline void set_id(const id to)
+  { send_message(REQ_INIT, to); }
 
-  void on_message(connection_ptr con, message_ptr msg_p)
+  inline void ping(const id to)
+  { send_message(REQ_PING, to); }
+
+  inline void send(const id to, unsigned char *msg, size_t cnt)
+  { send_message(REQ_DATA, to, msg, cnt); }
+
+  void on_message(Tcon_ptr con, unsigned char *msg, size_t cnt)
   {
-#define RET(x) {msg[0]= x;con->send(msg, websocketpp::frame::opcode::BINARY);return;}
-    std::string msg(msg_p->get_payload());
-    if (msg.size()< HEAD_LEN) RET(ERR_PROTOCOL);
-    auto opcode= msg[0];
-    id id_from; id_from.get_from(msg.begin()+1);
+    if (cnt < HEAD_LEN)
+    {
+      msg[0]= ERR_PROTOCOL;
+      raw_send(con, msg, cnt);
+      return;
+    }
+    con_= con;
+    unsigned char opcode= msg[0];
+    id id_from(msg+OP_LEN);
     switch (opcode)
     {
-      case REQ_PING:
-        RET(REQ_PONG);
-      case REQ_PONG:
-        on_pong(id_from);
-        return;
-      case REQ_DATA:
-        on_data(id_from, msg);
-        return;
       case SUCC_ID_REQ:
         on_setting_succ(id_from);
-        return;
-      case ERR_ID_CONFLIT:
+        break;
+      case REQ_PING:
+        msg[0]= REQ_PONG;
+        raw_send(con, msg, cnt);
+        break;
+      case REQ_PONG:
+        on_pong(id_from);
+        break;
+      case REQ_DATA:
+        on_data(id_from, msg+HEAD_LEN, cnt-HEAD_LEN);
+        break;
+      case ERR_ID_CONFLICT:
       case ERR_ID_NOT_FOUND:
       case ERR_PROTOCOL:
-        on_error(id_from, msg);
-        return;
+        on_error(id_from, msg, cnt);
+        break;
+      default:
+        msg[0]= ERR_PROTOCOL;
+        raw_send(con, msg, cnt);
+        break;
     }
-    RET(ERR_PROTOCOL);
-#undef RET
   }
 
-  connection_ptr con_;
+private:
+  void send_message(enum opcode_t op,const id to, 
+                    unsigned char *msg=NULL, size_t cnt=0)
+  {
+    static std::vector<unsigned char> buf;
+    buf.resize(PRE_BYTES + HEAD_LEN + cnt + POST_BYTES);
+    unsigned char *b= buf.data() + PRE_BYTES;
+    b[0]= op;
+    to.assign(b + OP_LEN);
+    if (msg) memcpy(b + PRE_BYTES + HEAD_LEN, msg, cnt);
+    raw_send(con_, b, HEAD_LEN + cnt);
+  }
+
+  Tcon_ptr con_;
 };
 
+} //namespace transfer
 #endif

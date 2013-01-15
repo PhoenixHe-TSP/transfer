@@ -1,10 +1,8 @@
-#ifndef _LWS_SERVER_HPP_
-#define _LWS_SERVER_HPP_
+#ifndef _LWS_CLIENT_HPP_
+#define _LWS_CLIENT_HPP_
 
-#include <vector>
-#include <cstring>
 #include <libwebsockets.h>
-#include "tf_server.hpp"
+#include "tf_client.hpp"
 
 static int callback_http(struct libwebsocket_context *context,
                          struct libwebsocket *wsi,
@@ -14,22 +12,31 @@ static int callback_http(struct libwebsocket_context *context,
 	return 0;
 }
 
-struct fun_send
+class websocket_client : 
+  public transfer::client<libwebsocket*, LWS_SEND_BUFFER_PRE_PADDING, LWS_SEND_BUFFER_POST_PADDING>
 {
-  void operator()(libwebsocket *wsi, void *in, size_t len)
-  {
-    buf.resize(LWS_SEND_BUFFER_PRE_PADDING + len + LWS_SEND_BUFFER_POST_PADDING);
-    unsigned char *b= buf.data() + LWS_SEND_BUFFER_PRE_PADDING;
-    memcpy(b, in, len);
-    libwebsocket_write(wsi, b, len, LWS_WRITE_TEXT);
-  }
-  std::vector<unsigned char> buf;
-};
- 
-typedef transfer::server<libwebsocket*, fun_send> websocket_server;
-websocket_server *the_server;
+public:
+  websocket_client(transfer::id d): id_(d) {}
 
-static int callback_tf_server(struct libwebsocket_context *context,
+  transfer::id get_id()const
+  { return id_; }
+
+  void raw_send(libwebsocket *wsi, unsigned char *msg, size_t cnt)
+  { libwebsocket_write(wsi, msg, cnt, LWS_WRITE_TEXT); }
+
+  void on_data(const transfer::id id, unsigned char *msg, size_t cnt)
+  {
+    msg[cnt]= 0;
+    std::cout<< "from "<< id<< ':'<< (char*)msg<< std::endl;
+  }
+
+private:
+  transfer::id id_;
+};
+
+websocket_client *the_client;
+
+static int callback_tf_client(struct libwebsocket_context *context,
                                    struct libwebsocket *wsi,
                                    enum libwebsocket_callback_reasons reason,
                                    void *user, void *in, size_t len)
@@ -37,13 +44,10 @@ static int callback_tf_server(struct libwebsocket_context *context,
   switch(reason)
   {
     case LWS_CALLBACK_ESTABLISHED:
-      the_server-> on_open(wsi);
+      the_client-> set_id(the_client-> get_id());
       break;
     case LWS_CALLBACK_RECEIVE:
-      the_server-> on_message(wsi, (unsigned char*)in, len);
-      break;
-    case LWS_CALLBACK_CLOSED:
-      the_server-> on_close(wsi);
+      the_client-> on_message(wsi, (unsigned char*)in, len);
       break;
     default:
       break;
@@ -60,7 +64,7 @@ static struct libwebsocket_protocols protocols[] = {
     },
     {
         "htc-transfer-protocol", // protocol name - very important!
-        callback_tf_server,   // callback
+        callback_tf_client,   // callback
         0
     },
     {

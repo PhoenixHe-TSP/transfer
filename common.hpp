@@ -15,7 +15,7 @@ namespace transfer{
  *   0xf2 id not found
  *   0xf3 protocol error
  */
-enum{ 
+enum opcode_t{ 
   REQ_INIT = 'I',
   REQ_DATA = 'D',
   REQ_PING = 'P',
@@ -25,8 +25,6 @@ enum{
   ERR_ID_NOT_FOUND = 'n',
   ERR_PROTOCOL     = 't'
 };
-
-enum{ OP_LEN = 1 };
 
 class id{
 public:
@@ -48,7 +46,7 @@ public:
     return id_;
   }
 
-  void assign(unsigned char* out)
+  void assign(unsigned char* out)const
   {
     out[0]= (id_ & 0xff000000) >> 24;
     out[1]= (id_ & 0x00ff0000) >> 16;
@@ -60,7 +58,8 @@ private:
   uint32_t id_;
 };
 
-enum{ HEAD_LEN = OP_LEN+id::LEN };
+enum{ OP_LEN = 1,
+      HEAD_LEN = OP_LEN+id::LEN };
 
 } //namespace transfer
 #endif
