@@ -1,6 +1,7 @@
 #ifndef _COMMON_HPP_
 #define _COMMPN_HPP_
 
+namespace transfer{
 /* my transfer protocol:
  * op_code id [data]
  * id: 4 bytes, server's id is 0
@@ -19,10 +20,47 @@ enum{
   REQ_DATA = 'D',
   REQ_PING = 'P',
   REQ_PONG = 'p',
-  SUCC_ID_REQ      = 0xf0,
-  ERR_ID_CONFLICT  = 0xf1,
-  ERR_ID_NOT_FOUND = 0xf2,
-  ERR_PROTOCOL     = 0xf3
-}opcode_t;
+  SUCC_ID_REQ      = 's',
+  ERR_ID_CONFLICT  = 'c',
+  ERR_ID_NOT_FOUND = 'n',
+  ERR_PROTOCOL     = 't'
+};
 
+enum{ OP_LEN = 1 };
+
+class id{
+public:
+  enum{ LEN = 4 };
+
+  id(uint32_t d): id_(d) {}
+
+  id(): id((uint32_t)0) {}
+
+  id(const unsigned char* in)
+  {
+    id_= 0;
+    for (int i=0;i<LEN;++i)
+      id_= id_*256 + in[i];
+  }
+  
+  operator uint32_t()const
+  {
+    return id_;
+  }
+
+  void assign(unsigned char* out)
+  {
+    out[0]= (id_ & 0xff000000) >> 24;
+    out[1]= (id_ & 0x00ff0000) >> 16;
+    out[2]= (id_ & 0x0000ff00) >> 8;
+    out[3]= (id_ & 0x000000ff);
+  }
+
+private:
+  uint32_t id_;
+};
+
+enum{ HEAD_LEN = OP_LEN+id::LEN };
+
+} //namespace transfer
 #endif
