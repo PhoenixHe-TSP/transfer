@@ -1,6 +1,7 @@
 #ifndef _LWS_CLIENT_HPP_
 #define _LWS_CLIENT_HPP_
 
+#include <iostream>
 #include <libwebsockets.h>
 #include "tf_client.hpp"
 
@@ -21,13 +22,14 @@ public:
   transfer::id get_id()const
   { return id_; }
 
-  void raw_send(libwebsocket *wsi, unsigned char *msg, size_t cnt)
-  { libwebsocket_write(wsi, msg, cnt, LWS_WRITE_TEXT); }
+  void raw_send(libwebsocket *wsi, void *msg, size_t cnt)
+  { libwebsocket_write(wsi, (unsigned char*)msg, cnt, LWS_WRITE_TEXT); }
 
-  void on_data(const transfer::id id, unsigned char *msg, size_t cnt)
+  void on_data(const transfer::id id, void *in, size_t cnt)
   {
+    char* msg= (char*)in;
     msg[cnt]= 0;
-    std::cout<< "from "<< id<< ':'<< (char*)msg<< std::endl;
+    std::cout<< "from "<< id<< ':'<< msg<< std::endl;
   }
 
 private:
@@ -44,10 +46,12 @@ static int callback_tf_client(struct libwebsocket_context *context,
   switch(reason)
   {
     case LWS_CALLBACK_ESTABLISHED:
+      std::cout<<"linked."<<std::endl;
+      the_client-> on_established(wsi);
       the_client-> set_id(the_client-> get_id());
       break;
     case LWS_CALLBACK_RECEIVE:
-      the_client-> on_message(wsi, (unsigned char*)in, len);
+      the_client-> on_message((unsigned char*)in, len);
       break;
     default:
       break;
