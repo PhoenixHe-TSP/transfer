@@ -1,123 +1,81 @@
 # -*- coding: utf-8 -*-
 
-from random import choice
-from django.utils import simplejson
-from google.appengine.api import channel, memcache, users
-from google.appengine.ext.webapp.util import run_wsgi_app
-from google.appengine.ext import webapp
+import webapp2
+from google.appengine.api import channel, memcache
 
-local_cache = {}
-
-def global_get(key):
-  value = local_cache.get(key):
-  if value is None:
-    value = memcache.get(key)
-    local_cache[key] = value
-  return value
-
-def global_set(key, value):
-  memcache.set(key, value)
-  local_cache[key] = value
-
-def broadcast(message, tokens=None):
-	if not tokens:
-		tokens = memcache.get('tokens')
-	if tokens:
-		tokens.pop('_used_ids', None) # make sure you won't use the tokens after broadcast(), otherwise you need do a copy
-		ids = set(tokens.values()) # remove duplicate ids
-		# be noticed that a logged in user may connect to 1 channel by using several browsers at the same time
-		# it works strange both in the cloud and local server:
-		#   1. if removed the duplicate ids, only the last connected browser can receive the message
-		#   2. if not removed them, all the browsers will receive duplicate messages
-		# I don't know if it's a bug of the SDK 1.4.0
-		for id in ids: # it may take a while if there are many users in the room, I think you can use task queue to handle this problem
-			if isinstance(id, int):
-				id = 'anonymous(%s)' % id
-			channel.send_message(id, message)
-
-class GetTokenHandler(webapp.RequestHandler):
+class GetTokenHandler(webapp2.RequestHandler):
 	def get(self):
-		tokens = memcache.get('tokens') or {}
-		user = users.get_current_user()
-		if user:
-			channel_id = id = user.email() # you can use hash algorithm for ensuring the channel id is less then 64 bytes
-		else:
-			used_ids = tokens.get('_used_ids') or set()
-			available_ids = ANONYMOUS_IDS - used_ids
-			if available_ids:
-				available_ids = list(available_ids)
-			else:
-				self.response.out.write('')
-				return
-			id = choice(available_ids)
-			used_ids.add(id)
-			tokens['_used_ids'] = used_ids
-			channel_id = 'anonymous(%s)' % id
-		token = channel.create_channel(channel_id)
-		tokens[token] = id
-		memcache.set('tokens', tokens) # you can use datastore instead of memcache
-		self.response.out.write(token)
+    id = self.request.get('id')
+    if not id:
+      return
+    info = memcache.get(id)
+    if not ret:
+#register the id
+      token = channel.create_channel(id)
+      memcache.set(id, [token, 0])
+    elif info[1]:
+#the channel is already in use
+      return
+    else:
+      token = info[0]
+    self.response.out.write(token)
 
-class ReleaseTokenHandler(webapp.RequestHandler):
+class ConnectHandler(webapp2.RequestHandler):
+  def get(self):
+    id = self.request.get('from')
+    info = memcache.get(id)
+    if not info:
+#not possible yet...
+      return
+    info[1] = 1
+    memcache.set(id, info)
+
+class DisconnectHandler(webapp2.RequestHandler):
+  def get(self):
+    id = self.request.get('from')
+    info = memcache.get(id)
+    if not info:
+#not possible yet...
+      return
+    info[1] = 0
+    memcache.set(id, info)
+
+class ReceiveHandler(webapp2.RequestHandler):
+  def send(self, opcode, id, msg):
 	def post(self):
-		token = self.request.get('token')
-		if not token:
+		id = self.request.get('id')
+    msg = self.request.get('msg')
+		if not token or not msg:
 			return
-		tokens = memcache.get('tokens')
-		if tokens:
-			id = tokens.get(token, '')
-			if id:
-				if isinstance(id, int):
-					used_ids = tokens.get('_used_ids')
-					if used_ids:
-						used_ids.discard(id)
-						tokens['_used_ids'] = used_ids
-					user_name = 'anonymous(%s)' % id
-				else:
-					user_name = id.split('@')[0]
-				del tokens[token]
-				memcache.set('tokens', tokens)
-				message = user_name + ' has left the chat room.'
-				message = simplejson.dumps(message)
-				broadcast(message, tokens)
+""" 
+my transfer protocol:
+op_code id [data]
+id: 4 bytes, server's id is 0
+op_code: 1 byte
+  I    init id
+  D    send data to
+  P    ping
+  p    pong
+  s    successful requested one id
+  c    id conflicts
+  n    id not found
+  t    protocol error
+""" 
+    if len(msg) < 5:
+      return
+    opcode = msg[0]
+    id_to = msg[1:5]
+    info = memcache.get(id_to)
+    if not info[1]:
+      d
+      
+    if opcode == 'D':       #data
 
-
-class OpenHandler(webapp.RequestHandler):
-	def post(self):
-		token = self.request.get('token')
-		if token:
-      global_set(token, 0)
-
-class ReceiveHandler(webapp.RequestHandler):
-	def post(self):
-		token = self.request.get('token')
-		if not token:
-			return
-		message = self.request.get('content')
-		if not message:
-			return
-		tokens = memcache.get('tokens')
-		if tokens:
-			id = tokens.get(token, '')
-			if id:
-				if isinstance(id, int):
-					user_name = 'anonymous(%s)' % id
-				else:
-					user_name = id.split('@')[0]
-				message = '%s: %s' % (user_name, message)
-				message = simplejson.dumps(message)
-				if len(message) > channel.MAXIMUM_MESSAGE_LENGTH:
-					return
-				broadcast(message)
-
-application = webapp.WSGIApplication([('/post_msg', ReceiveHandler),
-									 ('/get_token', GetTokenHandler),
-									 ('/del_token', ReleaseTokenHandler),
-									 ('/open', OpenHandler)])
-
-def main():
-	run_wsgi_app(application)
-
+    
+app = webapp2.WSGIApplication([('/msg', ReceiveHandler),
+									 ('/get', GetTokenHandler)],
+                   ('/_ah/channel/connected', ConnectHandler),
+                   ('/_ah/channel/disconnected', DisconnectHandler)])
 
 if __name__ == '__main__':
-	main()
+	run_wsgi_app(app)

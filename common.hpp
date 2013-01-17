@@ -16,10 +16,10 @@ using namespace std;
  *   D    send data to
  *   P    ping
  *   p    pong
- *   0xf0 successful requested one id
- *   0xf1 id conflicts
- *   0xf2 id not found
- *   0xf3 protocol error
+ *   s    successful requested one id
+ *   c    id conflicts
+ *   n    id not found
+ *   t    protocol error
  */
 enum opcode_t{ 
   REQ_INIT = 'I',
