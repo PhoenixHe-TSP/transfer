@@ -14,6 +14,7 @@ using namespace std;
  * op_code: 1 byte
  *   I    init id
  *   D    send data to
+ *   C    close connection
  *   P    ping
  *   p    pong
  *   s    successful requested one id
@@ -24,6 +25,7 @@ using namespace std;
 enum opcode_t{ 
   REQ_INIT = 'I',
   REQ_DATA = 'D',
+  REQ_CLOS = 'C',
   REQ_PING = 'P',
   REQ_PONG = 'p',
   SUCC_ID_REQ      = 's',

@@ -5,7 +5,7 @@
 
 void work()
 {
-  transfer::id id("4321");
+  transfer::id id("1234");
   std::string str;
   while(std::getline(std::cin, str))
   {

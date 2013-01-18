@@ -1,5 +1,5 @@
 application: transfer-proxy-server
-version: 1
+version: chat2
 runtime: python27
 api_version: 1
 threadsafe: true
@@ -37,9 +37,6 @@ handlers:
   static_files: robots.txt
   upload: robots.txt
 
-- url: /_ah/admin/.*
-  script: $PYTHON_LIB/google/appengine/ext/admin
-  login: admin
+- url: /.*
+  script: main.app
 
-- url: .*
-  script: main.py
